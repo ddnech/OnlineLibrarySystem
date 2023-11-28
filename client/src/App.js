@@ -19,6 +19,7 @@ function App() {
       <header className="App-header">
         <img src={logo} className="App-logo" alt="logo" />
         {message}
+        <div className="bg-red-500">Test</div>
       </header>
     </div>
   );
