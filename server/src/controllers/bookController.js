@@ -5,8 +5,6 @@ const {
   getAbsoluteBookImagePath,
 } = require("../utils/filePathMulter");
 const { getAllBooks, getOneBook } = require("../service/book");
-const fs = require("fs").promises;
-const path = require("path");
 
 module.exports = {
   async registerBook(req, res) {
@@ -144,21 +142,21 @@ module.exports = {
         filter.name = req.query.name;
       } else {
         return res.status(400).json({
-          message: "Provide either product name or ID.",
+          message: "Provide either book name or ID.",
         });
       }
+
       const result = await getOneBook(filter);
       if (result.success) {
         return res.status(200).json(result.data);
       } else {
-        return res.status(500).json({ success: false, message: result.error });
+        return res.status(500).json({message: result.error });
       }
     } catch (error) {
       console.error(error);
       return res
         .status(500)
-        .json({ success: false, message: "Internal Server Error" });
+        .json({message: "Internal Server Error" });
     }
   },
-  
 };
