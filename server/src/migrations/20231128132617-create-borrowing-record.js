@@ -38,7 +38,11 @@ module.exports = {
       },
       bookStatus: {
         allowNull: false,
-        type: Sequelize.ENUM('Pending','Approve','Rejected','Borrowed','Return Pending','Returned','Overdue'),
+        type: Sequelize.ENUM('Pending','Rejected','Borrowed','Return Pending','Returned','Overdue'),
+      },
+      overdue: {
+        allowNull:false,
+        type: Sequelize.BOOLEAN,
       }, 
       createdAt: {
         allowNull: false,

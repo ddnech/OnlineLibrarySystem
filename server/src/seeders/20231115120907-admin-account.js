@@ -11,7 +11,7 @@ const Password = async (pass) => {
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    const password = await Password("Password123!");
+    const password = await Password("Password12");
     /**
      * Add seed commands here.
      *
@@ -21,7 +21,6 @@ module.exports = {
      *   isBetaMember: false
      * }], {});
      */
-    const pw = await Password("!Password1");
     await queryInterface.bulkInsert(
       "Users",
       [
@@ -30,7 +29,7 @@ module.exports = {
           roles: "admin",
           email: "admin@gmail.com",
           address:"test132",
-          password: pw,
+          password: password,
           fullName:"Admin something",
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -40,7 +39,7 @@ module.exports = {
           roles: "user",
           email: "usern@gmail.com",
           address:"test132",
-          password: pw,
+          password: password,
           fullName:"user something",
           createdAt: new Date(),
           updatedAt: new Date(),

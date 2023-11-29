@@ -12,6 +12,9 @@ module.exports = {
       genreName: {
         type: Sequelize.STRING
       },
+      genreImg: {
+        type: Sequelize.STRING
+      },
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE

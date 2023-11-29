@@ -15,11 +15,13 @@ module.exports = (sequelize, DataTypes) => {
   }
   Book.init({
     title: DataTypes.STRING,
+    bookImg: DataTypes.STRING,
     author: DataTypes.STRING,
     isbn: DataTypes.STRING,
     publishedYear: DataTypes.INTEGER,
     genreId: DataTypes.INTEGER,
-    quantity: DataTypes.INTEGER
+    quantity: DataTypes.INTEGER,
+    avalaible: DataTypes.INTEGER,
   }, {
     sequelize,
     modelName: 'Book',

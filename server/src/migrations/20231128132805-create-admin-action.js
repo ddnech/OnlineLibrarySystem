@@ -12,15 +12,12 @@ module.exports = {
       recordId: {
         type: Sequelize.INTEGER
       },
-      adminId: {
-        type: Sequelize.INTEGER
-      },
       actionDate: {
         type: Sequelize.DATE
       },
       action: {
         allowNull: false,
-        type: Sequelize.ENUM('Approve','Reject','Extend Due Date','Verify Returned'),
+        type: Sequelize.ENUM('Approve','Reject','Verify Returned'),
       },   
       notes: {
         type: Sequelize.STRING

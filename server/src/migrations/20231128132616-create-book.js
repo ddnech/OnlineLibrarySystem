@@ -13,6 +13,10 @@ module.exports = {
         allowNull: false,
         type: Sequelize.STRING
       },
+      bookImg: {
+        allowNull: false,
+        type: Sequelize.STRING
+      },
       author: {
         allowNull: false,
         type: Sequelize.STRING
@@ -35,6 +39,10 @@ module.exports = {
       },
       quantity: {
         allowNull: false,
+        type: Sequelize.INTEGER
+      },
+      avalaible: {
+        allowNull:false,
         type: Sequelize.INTEGER
       },
       createdAt: {

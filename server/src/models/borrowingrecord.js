@@ -19,8 +19,9 @@ module.exports = (sequelize, DataTypes) => {
     borrowDate: DataTypes.DATE,
     dueDate: DataTypes.DATE,
     returnDate: DataTypes.DATE,
-    bookStatus: DataTypes.ENUM('Pending', 'Approve', 'Rejected', 'Borrowed', 'Return Pending', 'Returned', 'Overdue'),
+    bookStatus: DataTypes.ENUM('Pending', 'Rejected', 'Borrowed', 'Return Pending', 'Returned'),
   }, {
+    overdue: DataTypes.BOOLEAN,
     sequelize,
     modelName: 'BorrowingRecord',
   });
