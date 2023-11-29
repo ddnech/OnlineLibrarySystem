@@ -9,7 +9,7 @@ const path = require("path");
 
 module.exports = {
   async createGenre(req, res) {
-    const { name } = req.body;
+    const { genreName } = req.body;
 
     const t = await db.sequelize.transaction();
 
@@ -26,7 +26,7 @@ module.exports = {
 
       const newGenre = await db.Genre.create(
         {
-          name,
+          genreName,
           genreImg,
         },
         { transaction: t }

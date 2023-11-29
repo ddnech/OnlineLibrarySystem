@@ -3,7 +3,7 @@ const path = require("path");
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const static = path.join(__dirname, "..", "..", "..","src", "public", "imgGenre");
+    const static = path.join(__dirname, "..", "..", "..","src", "public", "imgBook");
     cb(null, static);
   },
   filename: (req, file, cb) => {
@@ -19,7 +19,6 @@ const imageFilter = (req, file, cb) => {
     file.mimetype === "image/png" ||
     file.mimetype === "image/jpg"
   ) {
-    console.log("kena ini");
     cb(null, true);
   } else {
     console.log(file.mimetype);
@@ -36,8 +35,8 @@ const upload = multer({
   fileFilter: imageFilter,
 });
 
-module.exports = handleImageGenreUpload = (req, res, next) => {
-  upload.single("imgGenre")(req, res, (err) => {
+module.exports = handleImageBookUpload = (req, res, next) => {
+  upload.single("imgBook")(req, res, (err) => {
     if (err) {
       if (err instanceof multer.MulterError) {
         if (err.code === "LIMIT_FILE_SIZE") {
