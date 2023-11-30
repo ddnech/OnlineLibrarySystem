@@ -16,7 +16,7 @@ module.exports = (sequelize, DataTypes) => {
   AdminAction.init({
     recordId: DataTypes.INTEGER,
     actionDate: DataTypes.DATE,
-    action: DataTypes.ENUM('Approve','Reject','Verify Returned'),
+    action: DataTypes.ENUM('Approve','Verify Returned'),
     notes: DataTypes.STRING,
   }, {
     sequelize,

@@ -17,7 +17,7 @@ module.exports = {
       },
       action: {
         allowNull: false,
-        type: Sequelize.ENUM('Approve','Reject','Verify Returned'),
+        type: Sequelize.ENUM('Approve','Verify Returned'),
       },   
       notes: {
         type: Sequelize.STRING

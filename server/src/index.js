@@ -31,8 +31,8 @@ app.get("/api/greetings", (req, res, next) => {
 app.use("/api/auth", router.auth);
 app.use("/api/genre", router.genre);
 app.use("/api/book", router.book);
-// app.use("/api/admins", router.admin);
-// app.use("/api/users", router.user);
+app.use("/api/admins", router.admin);
+app.use("/api/users", router.user);
 // app.use("/api/books", router.book);
 // app.use("/api/genres", router.genre);
 
