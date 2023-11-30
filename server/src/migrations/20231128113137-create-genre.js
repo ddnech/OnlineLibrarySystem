@@ -10,7 +10,8 @@ module.exports = {
         type: Sequelize.INTEGER
       },
       genreName: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING,
+        unique:true,
       },
       genreImg: {
         type: Sequelize.STRING

@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const { join } = require("path");
 const router = require("./routes");
+require("./schedule/overdueBook");
 
 const PORT = process.env.PORT || 8000;
 const app = express();
@@ -27,6 +28,7 @@ app.get("/api/greetings", (req, res, next) => {
 
 // ===========================
 
+app.use("/src/public/imgBook", express.static("src/public/imgBook"));
 
 app.use("/api/auth", router.auth);
 app.use("/api/genre", router.genre);

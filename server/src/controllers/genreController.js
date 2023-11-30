@@ -21,9 +21,6 @@ module.exports = {
       }
 
       const genreImg = createGenreImageDBPath(req.file?.filename);
-      console.log("kena ini");
-      console.log("ini genre img", genreImg);
-
       const newGenre = await db.Genre.create(
         {
           genreName,
@@ -43,6 +40,25 @@ module.exports = {
       res.status(500).json({
         message: "Fatal error on server",
         errors: error.message,
+      });
+    }
+  },
+
+  async getAllGenres(req, res) {
+    try {
+      const genres = await db.Genre.findAll({
+        attributes: ['id', 'genreName', 'genreImg'],
+      });
+
+      res.status(200).json({
+        message: "Genres retrieved successfully",
+        data: genres
+      });
+    } catch (error) {
+      console.error("Error fetching genres: ", error);
+      res.status(500).json({
+        message: "Error retrieving genres",
+        error: error.message
       });
     }
   },

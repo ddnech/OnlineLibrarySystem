@@ -79,7 +79,7 @@ module.exports = {
       .withMessage("Maximum character is 50")
       .matches(/^[a-zA-Z\s'-]+$/)
       .withMessage(
-        "First name can only contain letters, spaces, hyphens, and apostrophes"
+        "Full name can only contain letters, spaces, hyphens, and apostrophes"
       ),
     body("email")
       .notEmpty()
@@ -88,7 +88,7 @@ module.exports = {
       .withMessage("Must be a valid email address")
       .custom(checkEmail)
       .custom((email) => {
-        const allowedDomains = ["gmail.com", "hotmail.com"]; // add more domains as needed
+        const allowedDomains = ["gmail.com", "hotmail.com"];
         const domain = email.split("@")[1];
         if (!allowedDomains.includes(domain)) {
           throw new Error(
