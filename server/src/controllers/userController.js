@@ -1,6 +1,38 @@
 const db = require("../models");
 
 module.exports = {
+  async getUserProfile(req, res) {
+    const userId = req.user.id;
+
+    try {
+      const user = await db.User.findByPk(userId, {
+        attributes: ['id', 'username', 'email', 'address', 'fullName', 'roles'],
+        include: [{
+          model: db.BorrowingRecord,
+          as: 'BorrowingRecords',
+          attributes: ['id', 'borrowDate', 'dueDate', 'returnDate', 'bookStatus'],
+          limit: 1,
+          order: [['createdAt', 'DESC']]
+        }]
+      });
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found." });
+      }
+
+      return res.status(200).json({
+        message: "User profile retrieved successfully.",
+        data: user
+      });
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      return res.status(500).json({
+        message: "Internal server error",
+        error: error.message
+      });
+    }
+  },
+
   async bookRequest(req, res) {
     const bookId = req.params.book_id;
     const userId = req.user.id;

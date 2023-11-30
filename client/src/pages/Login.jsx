@@ -27,15 +27,22 @@ export default function LoginUser() {
   const handleSubmit = async (values, { setSubmitting, setFieldError, resetForm, setStatus }) => {
     try {
       const response = await axios.post('http://localhost:8000/api/auth/login', values);
-
+  
       if (response.status === 200) {
-        const { token } = response.data;
-
+        const { token, roles } = response.data;
+  
         localStorage.setItem('token', token);
         dispatch(keep(token));
         resetForm();
         setStatus({ success: true, token });
-        navigate('/admin/book-list');
+  
+        if (roles === 'admin') {
+          navigate('/admin/book-list');
+        } else if (roles === 'user') {
+          navigate('/user/book-list');
+        } else {
+          console.error('Unexpected role:', roles);
+        }
       } else {
         throw new Error('Login failed');
       }
@@ -46,6 +53,7 @@ export default function LoginUser() {
       setSubmitting(false);
     }
   };
+  
 
   const togglePasswordVisibility = () => {
     setShowPassword((prevShowPassword) => !prevShowPassword);

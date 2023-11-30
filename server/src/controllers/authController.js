@@ -21,7 +21,7 @@ module.exports = {
       const token = generateToken(user);
       return res.json({
         message: "Login successful",
-        user,
+        roles:user.roles,
         token,
       });
     } catch (error) {

@@ -1,15 +1,38 @@
 import React, { useState, useEffect } from "react";
-
 import axios from "axios";
 import DefaultPagination from "./Pagination";
+import { useSelector } from "react-redux";
 
-export default function AllBooks() {
+function Modal({ isOpen, message, onClose }) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex justify-center items-center">
+      <div className="bg-white p-4 rounded text-center">
+        <p>{message}</p>
+        <div className="flex justify-center mt-2">
+          <button
+            className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function UserBookCards() {
   const [books, setBooks] = useState([]);
   const [genres, setGenres] = useState([]);
   const [selectedGenre, setSelectedGenre] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMessage, setModalMessage] = useState("");
+  const token = useSelector((state) => state.auth.token);
 
   useEffect(() => {
     fetchGenres();
@@ -28,7 +51,12 @@ export default function AllBooks() {
   const fetchData = async () => {
     try {
       const response = await axios.get(
-        `http://localhost:8000/api/book?page=${currentPage}&pageSize=9&genre_id=${selectedGenre}&book_title=${searchTerm}`
+        `http://localhost:8000/api/book?page=${currentPage}&pageSize=9&genre_id=${selectedGenre}&book_title=${searchTerm}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
       setBooks(response.data.data);
       setTotalPages(response.data.pagination.totalPages);
@@ -40,6 +68,34 @@ export default function AllBooks() {
   const handleImageError = (event) => {
     event.target.src =
       "https://static.vecteezy.com/system/resources/previews/004/141/669/non_2x/no-photo-or-blank-image-icon-loading-images-or-missing-image-mark-image-not-available-or-image-coming-soon-sign-simple-nature-silhouette-in-frame-isolated-illustration-vector.jpg";
+  };
+
+  const handleBorrowBook = async (bookId) => {
+    try {
+      const response = await axios.post(
+        `http://localhost:8000/api/users/${bookId}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      setModalMessage(response.data.message);
+      setIsModalOpen(true);
+    } catch (error) {
+      if (error.response && error.response.data.message) {
+        setModalMessage(error.response.data.message);
+        setIsModalOpen(true);
+      } else {
+        console.error("Error borrowing book:", error);
+      }
+    }
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setModalMessage("");
   };
 
   const onPageChange = (page) => {
@@ -71,7 +127,6 @@ export default function AllBooks() {
           ))}
         </select>
       </div>
-
       {books.length === 0 ? (
         <div className="w-full font-josefin text-xl text-center mx-auto my-5">
           No books found
@@ -114,6 +169,12 @@ export default function AllBooks() {
                       </tbody>
                     </table>
                   </div>
+                  <button
+                    onClick={() => handleBorrowBook(book.id)}
+                    className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 mt-2"
+                  >
+                    Borrow Book
+                  </button>
                 </div>
               </div>
             </div>
@@ -128,6 +189,11 @@ export default function AllBooks() {
           onPageChange={onPageChange}
         />
       </div>
+      <Modal
+        isOpen={isModalOpen}
+        message={modalMessage}
+        onClose={handleCloseModal}
+      />
     </>
   );
 }
