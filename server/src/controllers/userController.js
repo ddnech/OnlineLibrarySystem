@@ -35,7 +35,6 @@ module.exports = {
         overdue: false
       }, { transaction: t });
 
-      await book.decrement('avalaible', { by: 1, transaction: t });
       await t.commit();
       return res.status(201).json({
         message: "Book borrowing request successful.",
@@ -51,45 +50,30 @@ module.exports = {
   },
 
   async bookReturn(req, res) {
-    const { bookId, userId } = req.params;
+    const recordId = req.params.id;
+    const userId = req.user.id; 
     const t = await db.sequelize.transaction();
-
+  
     try {
-      const activeBorrow = await db.BorrowingRecord.findOne({
-        where: {
-          userId,
-          bookId,
-          bookStatus: { [db.Sequelize.Op.not]: 'Returned' }
-        }
-      });
-
-      if (!activeBorrow) {
-        return res.status(404).json({ message: "No active borrowing record found for this book and user." });
+      const activeBorrow = await db.BorrowingRecord.findByPk(recordId);
+  
+      if (!activeBorrow || activeBorrow.bookStatus === 'Returned' || activeBorrow.userId !== userId) {
+        return res.status(404).json({ message: "Borrowing record not found, already returned, or not borrowed by this user." });
       }
-
-      const returnDate = new Date();
+  
       await activeBorrow.update({ 
-        returnDate, 
-        bookStatus: 'Returned' 
+        bookStatus: 'Return Pending' 
       }, { transaction: t });
-
-      const book = await db.Books.findByPk(bookId);
-      if (book) {
-        await book.increment('avalaible', { by: 1, transaction: t });
-      } else {
-        return res.status(404).json({ message: "Book not found." });
-      }
-
+  
       await t.commit();
-
       return res.status(200).json({
-        message: "Book return successful.",
+        message: "Book return marked as pending",
         data: activeBorrow
       });
     } catch (error) {
       await t.rollback();
       return res.status(500).json({
-        message: "Fatal error on server",
+        message: "Internal server error",
         error: error.message
       });
     }
