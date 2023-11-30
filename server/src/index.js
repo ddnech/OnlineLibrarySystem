@@ -27,6 +27,7 @@ app.get("/api/greetings", (req, res, next) => {
 
 // ===========================
 
+app.use("/src/public/imgBook", express.static("src/public/imgBook"));
 
 app.use("/api/auth", router.auth);
 app.use("/api/genre", router.genre);

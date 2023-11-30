@@ -18,11 +18,11 @@ module.exports = {
         return res.status(401).json({ error: "Invalid username or password" });
       }
 
-      const accessToken = generateToken(user);
+      const token = generateToken(user);
       return res.json({
         message: "Login successful",
         user,
-        accessToken,
+        token,
       });
     } catch (error) {
       console.error("Error during login:", error);

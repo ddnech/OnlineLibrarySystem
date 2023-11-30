@@ -31,6 +31,18 @@ const checkBookName = async (value, { req }) => {
   }
 };
 
+const checkGenreName = async (value, { req }) => {
+  try {
+    const genre = await db.Genre.findOne({ where: { genreName: value } });
+    if (genre) {
+      throw new Error("Genre name already taken");
+    }
+    return true;
+  } catch (error) {
+    throw new Error(error.message);
+  }
+};
+
 const removeEmptyFields = (req, res, next) => {
   Object.keys(req.body).forEach((key) => {
     if (req.body[key] === null || req.body[key] === undefined) {
@@ -70,7 +82,13 @@ module.exports = {
       .isNumeric()
       .withMessage("Quantity should be a valid number"),
   ]),
-
+  validateRegisterGenre: validate([
+    body("genreName")
+      .notEmpty()
+      .withMessage("Name is required")
+      .custom(checkGenreName),
+  ]),
+  
   validateUpdateBook: validate([
     body("title")
       .optional()
