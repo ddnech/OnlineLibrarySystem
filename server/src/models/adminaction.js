@@ -11,6 +11,10 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       // define association here
+      AdminAction.belongsTo(models.BorrowingRecord, {
+        foreignKey: 'recordId',
+        as: 'BorrowingRecord'
+      });
     }
   }
   AdminAction.init({

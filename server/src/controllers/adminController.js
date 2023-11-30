@@ -1,4 +1,8 @@
 const db = require("../models");
+const {
+  getAllAdminAction,
+  getOneAdminAction,
+} = require("../service/adminAction");
 
 module.exports = {
   async approveBorrowRequest(req, res) {
@@ -44,9 +48,9 @@ module.exports = {
   },
 
   async approveReturnRequest(req, res) {
-    const  recordId  = req.params.id;
+    const recordId = req.params.id;
     const t = await db.sequelize.transaction();
-  
+
     try {
       const returnRecord = await db.BorrowingRecord.findByPk(recordId);
       if (!returnRecord || returnRecord.bookStatus !== "Return Pending") {
@@ -54,19 +58,20 @@ module.exports = {
           message: "Return record not found or not in Return Pending status.",
         });
       }
-  
+
       const book = await db.Book.findByPk(returnRecord.bookId);
       if (book) {
         await book.increment("avalaible", { by: 1, transaction: t });
       }
-  
+
       const isOverdue = returnRecord.dueDate < new Date();
-      const notes = isOverdue
-        ? `Returned overdue`
-        : `Returned on time`;
-  
-        await returnRecord.update({ bookStatus: "Returned", returnDate: new Date() }, { transaction: t });
-  
+      const notes = isOverdue ? `Returned overdue` : `Returned on time`;
+
+      await returnRecord.update(
+        { bookStatus: "Returned", returnDate: new Date() },
+        { transaction: t }
+      );
+
       await db.AdminAction.create(
         {
           recordId,
@@ -76,7 +81,7 @@ module.exports = {
         },
         { transaction: t }
       );
-  
+
       await t.commit();
       return res
         .status(200)
@@ -89,5 +94,38 @@ module.exports = {
       });
     }
   },
-  
+
+  async getAdminActionsList(req, res) {
+    const page = Number(req.query.page) || 1;
+    const pageSize = Number(req.query.pageSize) || 10;
+    const bookTitle = req.query.book_title;
+    const action = req.query.action;
+
+    try {
+      const result = await getAllAdminAction(
+        { bookTitle, action },
+        page,
+        pageSize
+      );
+      if (result.success) {
+        res.status(200).json({
+          message: "Admin Actions list retrieved successfully",
+          data: result.data,
+          pagination: result.pagination,
+        });
+      } else {
+        res.status(500).json({
+          message: "Error fetching Admin Actions.",
+          errors: result.error,
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({
+        success: false,
+        message: "Fatal error on server.",
+        errors: error.message,
+      });
+    }
+  },
 };
