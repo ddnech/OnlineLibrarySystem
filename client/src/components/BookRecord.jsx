@@ -45,7 +45,7 @@ export default function BookRecords() {
           Authorization: `Bearer ${token}`
         }
       });
-      fetchData(); // Refresh data after approval
+      fetchData();
     } catch (error) {
       console.error('Error approving return:', error);
     }
@@ -69,7 +69,6 @@ export default function BookRecords() {
             <th className="py-3 px-6 text-center">Borrow Date</th>
             <th className="py-3 px-6 text-center">Due Date</th>
             <th className="py-3 px-6 text-center">Status</th>
-            <th className="py-3 px-6 text-center">Actions</th>
           </tr>
         </thead>
         <tbody className="text-gray-600 text-sm font-light">
@@ -79,13 +78,13 @@ export default function BookRecords() {
               <td className="py-3 px-6 text-left">{record.Book.title}</td>
               <td className="py-3 px-6 text-center">{formatDate(record.borrowDate)}</td>
               <td className="py-3 px-6 text-center">{formatDate(record.dueDate)}</td>
-              <td className="py-3 px-6 text-center">{record.bookStatus}</td>
               <td className="py-3 px-6 text-center">
-                {record.bookStatus === "Pending" && (
+                {record.bookStatus === "Pending" ? (
                   <button onClick={() => handleApproveBorrow(record.id)} className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">Approve Borrow</button>
-                )}
-                {record.bookStatus === "Return Pending" && (
+                ) : record.bookStatus === "Return Pending" ? (
                   <button onClick={() => handleApproveReturn(record.id)} className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600">Approve Return</button>
+                ) : (
+                  record.bookStatus
                 )}
               </td>
             </tr>
