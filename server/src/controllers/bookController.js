@@ -5,6 +5,10 @@ const {
   getAbsoluteBookImagePath,
 } = require("../utils/filePathMulter");
 const { getAllBooks, getOneBook } = require("../service/book");
+const {
+  getAllBookRecords,
+  getOneBookRecord,
+} = require("../service/borrowingRecord");
 
 module.exports = {
   async registerBook(req, res) {
@@ -52,34 +56,46 @@ module.exports = {
 
   async updateBookDetails(req, res) {
     const { id } = req.params;
-    const editableFields = ["title", "author", "isbn", "publishedYear", "genreId", "quantity"];
+    const editableFields = [
+      "title",
+      "author",
+      "isbn",
+      "publishedYear",
+      "genreId",
+      "quantity",
+    ];
     const t = await db.sequelize.transaction();
-  
+
     try {
       const book = await db.Book.findByPk(id, { transaction: t });
-  
+
       if (!book) {
         await t.rollback();
         return res.status(404).json({ message: "Book not found!" });
       }
-  
+
       if (req.body.quantity !== undefined) {
         const newQuantity = req.body.quantity;
         if (newQuantity < book.avalaible) {
           await t.rollback();
-          return res.status(400).json({ message: "Cannot update quantity below the number of available books" });
+          return res
+            .status(400)
+            .json({
+              message:
+                "Cannot update quantity below the number of available books",
+            });
         }
       }
-  
+
       editableFields.forEach((field) => {
         if (req.body[field] !== undefined) {
           book[field] = req.body[field];
         }
       });
-  
+
       await book.save({ transaction: t });
       await t.commit();
-  
+
       return res.status(200).send({
         message: "Book updated successfully",
         data: book,
@@ -89,7 +105,9 @@ module.exports = {
         await t.rollback();
       }
       console.error("Error:", error);
-      res.status(500).json({ message: "Fatal error on server", errors: error.message });
+      res
+        .status(500)
+        .json({ message: "Fatal error on server", errors: error.message });
     }
   },
 
@@ -150,13 +168,53 @@ module.exports = {
       if (result.success) {
         return res.status(200).json(result.data);
       } else {
-        return res.status(500).json({message: result.error });
+        return res.status(500).json({ message: result.error });
       }
     } catch (error) {
       console.error(error);
-      return res
-        .status(500)
-        .json({message: "Internal Server Error" });
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  },
+
+  async getBookRecordsList(req, res) {
+    const page = Number(req.query.page) || 1;
+    const pageSize = Number(req.query.pageSize) || 10;
+    const bookTitle = req.query.book_title;
+    const genreId = req.query.genre_id;
+
+    let userId = null;
+    if (req.user.roles !== "admin") {
+      userId = req.user.id;
+    }
+
+    console.log("User role:", req.user.role);
+    console.log("User ID for query:", userId);
+
+    try {
+      const result = await getAllBookRecords(
+        { bookTitle, genreId, userId },
+        page,
+        pageSize
+      );
+      if (result.success) {
+        res.status(200).json({
+          message: "Book records retrieved successfully",
+          data: result.data,
+          pagination: result.pagination,
+        });
+      } else {
+        res.status(500).json({
+          message: "Error fetching book records.",
+          errors: result.error,
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({
+        success: false,
+        message: "Fatal error on server.",
+        errors: error.message,
+      });
     }
   },
 };

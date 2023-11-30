@@ -10,7 +10,12 @@ module.exports = {
         type: Sequelize.INTEGER
       },
       recordId: {
-        type: Sequelize.INTEGER
+        allowNull: false,
+        type: Sequelize.INTEGER,
+        references: {
+          model: "BorrowingRecords",
+          key: "id",
+        },
       },
       actionDate: {
         type: Sequelize.DATE

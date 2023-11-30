@@ -29,7 +29,7 @@ module.exports = {
     }
   },
 
-  async getAllBooks(options = {}, page = 1, pageSize = 9) {
+  async getAllBooks(options = {}, page = 1, pageSize = 10) {
     const filter = options.where || {};
 
     const defaultInclude = [

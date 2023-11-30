@@ -11,6 +11,14 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       // define association here
+      BorrowingRecord.belongsTo(models.Book, {
+        foreignKey: 'bookId',
+        as: 'Book'
+      });
+      BorrowingRecord.belongsTo(models.User, {
+        foreignKey: 'userId',
+        as: 'User'
+      });
     }
   }
   BorrowingRecord.init({
