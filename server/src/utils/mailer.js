@@ -9,7 +9,7 @@ module.exports = {
   }) => {
     return new Promise((resolve, reject) => {
       var transporter = nodemailer.createTransport({
-        service: "Outlook",
+        service: process.env.service_email,
         auth: {
           user: process.env.MY_EMAIL,
           pass: process.env.MY_PASSWORD,
@@ -31,7 +31,7 @@ module.exports = {
 <div style="font-family: Helvetica,Arial,sans-serif;min-width:1000px;overflow:auto;line-height:2">
   <div style="margin:50px auto;width:70%;padding:20px 0">
     <div style="border-bottom:1px solid #eee">
-      <a href="" style="font-size:1.4em;color: #187BCD;text-decoration:none;font-weight:600">FURNIFOR</a>
+      <a href="" style="font-size:1.4em;color: #187BCD;text-decoration:none;font-weight:600">Book.com</a>
     </div>
     <p style="font-size:1.1em">Hi, ${receiver}</p>
     <p>${message}</p>
