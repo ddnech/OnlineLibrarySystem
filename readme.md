@@ -169,8 +169,6 @@ Every endpoint is under `/api`. Endpoints that need a login expect an `Authoriza
 | GET | `/admins/stats` | admin | counts for the dashboard |
 | GET | `/health` | anyone | returns ok if the API can reach the database |
 
-Errors always come back as `{ "message": "..." }`, and the message is written so it can be shown straight to the user.
-
 ## What changed in the 2026 update
 
 This project was first built in late 2023. The update covers:
@@ -197,14 +195,7 @@ This project was first built in late 2023. The update covers:
 - **Database:** a new migration fixes the `avalaible` column name, makes book covers optional and adds the "Rejected" status. Seeders are now tracked, so running them twice won't create duplicates.
 - **Setup:** Docker Compose for everything, one `.env` file, and Mailpit for test emails.
 
-**If you still have a database from the old version:** the new migration will update it, but the old seeders were never tracked, so they would try to add the admin account again and fail. It's easier to start with a fresh database.
 
 ## Troubleshooting
 
 **"Port is already allocated" when starting Docker.** Something else is using that port. Change `CLIENT_PORT`, `API_PORT` or `DB_PORT` in `.env`.
-
-**The login page says it can't reach the server.** The API is probably still starting, or it couldn't connect to MySQL. Check with `docker compose logs server`.
-
-**I changed `.env` but nothing happened.** Run `docker compose up --build` again. The website is built once when its image is created, so it needs a rebuild to pick up changes.
-
-**The demo data is missing, or I want it back.** Run `docker compose down -v` and start again.
