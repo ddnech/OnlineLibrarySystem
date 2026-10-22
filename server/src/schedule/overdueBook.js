@@ -1,40 +1,30 @@
 const schedule = require("node-schedule");
+const { Op } = require("sequelize");
 const db = require("../models");
 
-const checkOverdueBooks = async () => {
-
+/** Flags every loan that is past its due date and still not returned. */
+async function markOverdueLoans() {
   try {
-    const today = new Date();
-
-    const borrowedRecords = await db.BorrowingRecord.findAll({
-      where: {
-        bookStatus: 'Borrowed',
-        dueDate: {
-          [db.Sequelize.Op.lt]: today
+    const [count] = await db.BorrowingRecord.update(
+      { overdue: true },
+      {
+        where: {
+          bookStatus: { [Op.in]: ["Borrowed", "Return Pending"] },
+          dueDate: { [Op.lt]: new Date() },
+          overdue: false,
         },
-        overdue: false 
-      },
-    });
-
-    const t = await db.sequelize.transaction();
-
-    for (let record of borrowedRecords) {
-      if (record.dueDate < today) {
-        await db.BorrowingRecord.update(
-          { overdue: true },
-          { where: { id: record.id } },
-          { transaction: t }
-        );
       }
-    }
-
-    await t.commit();
+    );
+    if (count) console.log(`[overdue] Marked ${count} loan(s) as overdue.`);
   } catch (error) {
-    if (t && !t.finished) {
-      await t.rollback();
-      console.error("Error in checkOverdueBooks job:", error);
-    }
+    console.error("[overdue] Check failed:", error.message);
   }
-};
+}
 
-const job = schedule.scheduleJob("0 0 * * *", checkOverdueBooks);
+function startOverdueJob() {
+  markOverdueLoans();
+  // Every hour, on the hour.
+  return schedule.scheduleJob("0 * * * *", markOverdueLoans);
+}
+
+module.exports = { startOverdueJob, markOverdueLoans };

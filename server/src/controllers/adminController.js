@@ -1,131 +1,146 @@
+const { Op } = require("sequelize");
 const db = require("../models");
-const {
-  getAllAdminAction,
-  getOneAdminAction,
-} = require("../service/adminAction");
+const HttpError = require("../utils/httpError");
+const { loanDays } = require("../config/env");
+const { getPaging, paginationInfo } = require("../utils/pagination");
+
+const DAY = 24 * 60 * 60 * 1000;
 
 module.exports = {
-  async approveBorrowRequest(req, res) {
-    const recordId = req.params.id;
-    const t = await db.sequelize.transaction();
-
-    try {
-      const borrowRecord = await db.BorrowingRecord.findByPk(recordId);
-      if (!borrowRecord || borrowRecord.bookStatus !== "Pending") {
-        return res.status(404).json({
-          message: "Borrowing record not found or not in Pending status.",
-        });
+  async approveBorrow(req, res) {
+    const record = await db.sequelize.transaction(async (t) => {
+      const record = await db.BorrowingRecord.findByPk(req.params.id, { transaction: t, lock: t.LOCK.UPDATE });
+      if (!record || record.bookStatus !== "Pending") {
+        throw new HttpError(404, "This request doesn't exist or was already handled.");
       }
 
-      const book = await db.Book.findByPk(borrowRecord.bookId);
-      if (book) {
-        await book.decrement("avalaible", { by: 1, transaction: t });
+      const book = await db.Book.findByPk(record.bookId, { transaction: t, lock: t.LOCK.UPDATE });
+      if (!book || book.available < 1) {
+        throw new HttpError(409, "No copies are left on the shelf. Reject the request or wait for a return.");
       }
 
-      await borrowRecord.update({ bookStatus: "Borrowed" }, { transaction: t });
-
-      await db.AdminAction.create(
-        {
-          recordId,
-          actionDate: new Date(),
-          action: "Approve",
-          notes: `Approved by Admin`,
-        },
+      const now = new Date();
+      await book.decrement("available", { by: 1, transaction: t });
+      await record.update(
+        { bookStatus: "Borrowed", borrowDate: now, dueDate: new Date(now.getTime() + loanDays * DAY) },
         { transaction: t }
       );
+      await db.AdminAction.create(
+        { recordId: record.id, actionDate: now, action: "Approve", notes: "Approved by Admin" },
+        { transaction: t }
+      );
+      return record;
+    });
 
-      await t.commit();
-      return res
-        .status(200)
-        .json({ message: "Borrow request approved successfully." });
-    } catch (error) {
-      await t.rollback();
-      return res.status(500).json({
-        message: "Internal server error",
-        error: error.message,
-      });
-    }
+    res.json({ message: "Request approved.", data: record });
   },
 
-  async approveReturnRequest(req, res) {
-    const recordId = req.params.id;
-    const t = await db.sequelize.transaction();
+  async rejectBorrow(req, res) {
+    const reason = (req.body?.reason || "").trim().slice(0, 200);
 
-    try {
-      const returnRecord = await db.BorrowingRecord.findByPk(recordId);
-      if (!returnRecord || returnRecord.bookStatus !== "Return Pending") {
-        return res.status(404).json({
-          message: "Return record not found or not in Return Pending status.",
-        });
+    await db.sequelize.transaction(async (t) => {
+      const record = await db.BorrowingRecord.findByPk(req.params.id, { transaction: t, lock: t.LOCK.UPDATE });
+      if (!record || record.bookStatus !== "Pending") {
+        throw new HttpError(404, "This request doesn't exist or was already handled.");
       }
-
-      const book = await db.Book.findByPk(returnRecord.bookId);
-      if (book) {
-        await book.increment("avalaible", { by: 1, transaction: t });
-      }
-
-      const isOverdue = returnRecord.dueDate < new Date();
-      const notes = isOverdue ? `Returned overdue` : `Returned on time`;
-
-      await returnRecord.update(
-        { bookStatus: "Returned", returnDate: new Date() },
-        { transaction: t }
-      );
-
+      await record.update({ bookStatus: "Rejected" }, { transaction: t });
       await db.AdminAction.create(
-        {
-          recordId,
-          actionDate: new Date(),
-          action: "Verify Returned",
-          notes,
-        },
+        { recordId: record.id, actionDate: new Date(), action: "Reject", notes: reason || "Rejected by Admin" },
         { transaction: t }
       );
+    });
 
-      await t.commit();
-      return res
-        .status(200)
-        .json({ message: "Return request approved successfully." });
-    } catch (error) {
-      await t.rollback();
-      return res.status(500).json({
-        message: "Internal server error",
-        error: error.message,
-      });
-    }
+    res.json({ message: "Request rejected." });
   },
 
-  async getAdminActionsList(req, res) {
-    const page = Number(req.query.page) || 1;
-    const pageSize = Number(req.query.pageSize) || 10;
-    const bookTitle = req.query.book_title;
-    const action = req.query.action;
-
-    try {
-      const result = await getAllAdminAction(
-        { bookTitle, action },
-        page,
-        pageSize
-      );
-      if (result.success) {
-        res.status(200).json({
-          message: "Admin Actions list retrieved successfully",
-          data: result.data,
-          pagination: result.pagination,
-        });
-      } else {
-        res.status(500).json({
-          message: "Error fetching Admin Actions.",
-          errors: result.error,
-        });
+  // Works for "Return Pending" and also "Borrowed", for when a reader hands the
+  // book over at the desk without pressing the return button first.
+  async approveReturn(req, res) {
+    const notes = await db.sequelize.transaction(async (t) => {
+      const record = await db.BorrowingRecord.findByPk(req.params.id, { transaction: t, lock: t.LOCK.UPDATE });
+      if (!record || !["Return Pending", "Borrowed"].includes(record.bookStatus)) {
+        throw new HttpError(404, "This loan doesn't exist or was already returned.");
       }
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({
-        success: false,
-        message: "Fatal error on server.",
-        errors: error.message,
-      });
-    }
+
+      const now = new Date();
+      const late = record.dueDate && record.dueDate < now;
+      const notes = late ? "Returned overdue" : "Returned on time";
+
+      const book = await db.Book.findByPk(record.bookId, { transaction: t, lock: t.LOCK.UPDATE });
+      if (book && book.available < book.quantity) {
+        await book.increment("available", { by: 1, transaction: t });
+      }
+
+      await record.update({ bookStatus: "Returned", returnDate: now, overdue: Boolean(late) }, { transaction: t });
+      await db.AdminAction.create(
+        { recordId: record.id, actionDate: now, action: "Verify Returned", notes },
+        { transaction: t }
+      );
+      return notes;
+    });
+
+    res.json({ message: `Return confirmed (${notes.toLowerCase()}).` });
+  },
+
+  // GET /api/admins/admin-action?page=1&action=Approve&book_title=
+  async actions(req, res) {
+    const paging = getPaging(req.query, 15);
+    const where = {};
+    if (req.query.action) where.action = req.query.action;
+
+    const bookWhere = req.query.book_title
+      ? { title: { [Op.like]: `%${req.query.book_title.trim()}%` } }
+      : undefined;
+
+    const { rows, count } = await db.AdminAction.findAndCountAll({
+      where,
+      include: [
+        {
+          model: db.BorrowingRecord,
+          as: "BorrowingRecord",
+          attributes: ["id", "userId", "bookId"],
+          required: Boolean(bookWhere),
+          include: [
+            { model: db.User, as: "User", attributes: ["id", "username", "fullName"] },
+            { model: db.Book, as: "Book", attributes: ["id", "title"], where: bookWhere, required: Boolean(bookWhere) },
+          ],
+        },
+      ],
+      order: [["actionDate", "DESC"]],
+      limit: paging.limit,
+      offset: paging.offset,
+    });
+
+    res.json({
+      message: "Admin Actions list retrieved successfully",
+      data: rows,
+      pagination: paginationInfo(paging, count),
+    });
+  },
+
+  // Numbers for the top of the admin pages.
+  async stats(req, res) {
+    const now = new Date();
+    const [titles, copies, onShelf, pending, returns, overdue] = await Promise.all([
+      db.Book.count(),
+      db.Book.sum("quantity"),
+      db.Book.sum("available"),
+      db.BorrowingRecord.count({ where: { bookStatus: "Pending" } }),
+      db.BorrowingRecord.count({ where: { bookStatus: "Return Pending" } }),
+      db.BorrowingRecord.count({
+        where: { bookStatus: { [Op.in]: ["Borrowed", "Return Pending"] }, dueDate: { [Op.lt]: now } },
+      }),
+    ]);
+
+    res.json({
+      data: {
+        titles,
+        copies: copies || 0,
+        onLoan: (copies || 0) - (onShelf || 0),
+        pending,
+        returns,
+        overdue,
+      },
+    });
   },
 };

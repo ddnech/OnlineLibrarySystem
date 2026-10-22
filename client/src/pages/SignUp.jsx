@@ -1,221 +1,120 @@
-import React from "react";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Formik, Form, Field, ErrorMessage } from "formik";
-import * as Yup from "yup";
-import axios from "axios";
-import { AiOutlineEye, AiOutlineEyeInvisible } from "react-icons/ai";
+import { Link, useNavigate } from "react-router";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { toast } from "sonner";
+import AuthLayout from "../components/AuthLayout";
+import Field from "../components/Field";
+import PasswordInput from "../components/PasswordInput";
+import api, { errorMessage } from "../lib/api";
 
-export default function SignupUser() {
-  const [showPassword, setShowPassword] = useState(false);
-  const navigate = useNavigate();
-
-  const togglePassword = (e) => {
-    e.preventDefault();
-    setShowPassword(!showPassword);
-  };
-
-  const initialValues = {
-    username: "",
-    email: "",
-    fullName: "",
-    address: "",
-    password: "",
-    confirmPassword: "",
-  };
-  const pwdRgx = /^(?=.*[A-Z])(?=.*[0-9])[A-Za-z0-9]{8,}$/;
-
-  const validationSchema = Yup.object().shape({
-    username: Yup.string().required("Username is required"),
-    fullName: Yup.string().required("Full is required"),
-    email: Yup.string()
-      .email("Please use a valid email format")
-      .required("Email is required"),
-    address: Yup.string().required("Address is required"),
-    password: Yup.string()
-      .matches(pwdRgx, "At least 8 chars, 1 caps, and 1 number")
-      .required("Password is required"),
-    confirmPassword: Yup.string()
-      .oneOf([Yup.ref("password"), null], "Passwords must match")
-      .required("Confirm Password is required"),
+// Same rules as the API, so people see problems before they press the button.
+const schema = z
+  .object({
+    username: z
+      .string()
+      .trim()
+      .min(3, "Use at least 3 characters.")
+      .max(20, "Use 20 characters or fewer.")
+      .regex(/^[a-zA-Z0-9_-]+$/, "Only letters, numbers, - and _."),
+    fullName: z
+      .string()
+      .trim()
+      .min(1, "Enter your full name.")
+      .max(50, "Use 50 characters or fewer.")
+      .regex(/^[\p{L}\s'.-]+$/u, "Only letters, spaces, ' . and -."),
+    email: z.string().trim().email("Enter a valid email address."),
+    address: z.string().trim().min(1, "Enter your address."),
+    password: z
+      .string()
+      .regex(/^(?=.*[A-Z])(?=.*\d).{8,}$/, "At least 8 characters, with a capital letter and a number."),
+    confirmPassword: z.string(),
+  })
+  .refine((v) => v.password === v.confirmPassword, {
+    message: "Passwords don't match.",
+    path: ["confirmPassword"],
   });
 
-  const handleSubmit = async (values, { setSubmitting, resetForm, setStatus }) => {
+export default function SignUp() {
+  const navigate = useNavigate();
+  const [formError, setFormError] = useState("");
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    resolver: zodResolver(schema),
+    defaultValues: { username: "", fullName: "", email: "", address: "", password: "", confirmPassword: "" },
+  });
+
+  const onSubmit = async (values) => {
+    setFormError("");
     try {
-        const response = await axios.post(
-            "http://localhost:8000/api/auth/register",
-            values
-        );
-
-        if (response.status === 201) {
-            resetForm();
-            setStatus({ success: true, message: "Sign up successful!" });
-            setTimeout(() => {
-                navigate("/");
-            }, 3000);
-        }
+      const { data } = await api.post("/auth/register", values);
+      toast.success(data.message);
+      navigate("/", { replace: true });
     } catch (error) {
-        const response = error.response;
-        if (response && response.status === 400) {
-            const { errors } = response.data;
-            const errorMessage = errors[0].msg;
-            console.log(errorMessage);
-            setStatus({ success: false, message: errorMessage });
-        } else if (response && response.status === 500) {
-            setStatus({ success: false, message: "Internal Server Error" });
-        } else {
-            setStatus({ success: false, message: "An unexpected error occurred" });
-        }
-    } finally {
-        setSubmitting(false);
+      setFormError(errorMessage(error));
     }
-};
+  };
 
+  const input = (name, props = {}) => (
+    <input id={name} className="input" aria-invalid={!!errors[name]} {...props} {...register(name)} />
+  );
 
   return (
-    <div className="grid justify-center mt-3">
-      <div className="w-screen grid grid-flow-row justify-center">
-        <div>
-          <Formik
-            initialValues={initialValues}
-            validationSchema={validationSchema}
-            onSubmit={handleSubmit}
-          >
-            {({ isSubmitting, status }) => (
-              <Form>
-                <div className="grid grid-flow-row gap-1 justify-center">
-                  <h3 className="w-72 text-xl text-center font-josefin mt-4 text-jetblack tracking-wide font-semibold sm:text-2xl">
-                    Sign Up
-                  </h3>
-                  <h3 className="text-xs text-center font-josefin mb-4 text-jetblack tracking-wide sm:text-sm">
-                    Please fill in the information below:
-                  </h3>
-                  <div className="w-full grid grid-flow-row gap-3">
-                    {status && status.success && (
-                      <p className="font-ysa text-center text-greenn">
-                        {status.message}
-                      </p>
-                    )}
-                    {status && !status.success && (
-                      <p className="font-ysa text-center text-red-500">
-                        {status.message}
-                      </p>
-                    )}
-                    <div className="font-ysa relative mt-4">
-                      <ErrorMessage
-                        name="username"
-                        component="div"
-                        className="text-red-500 text-xs absolute -top-5"
-                      />
-                      <Field
-                        className="border border-gray-300 h-6 text-xs w-full focus:border-darkgreen focus:ring-0"
-                        type="text"
-                        name="username"
-                        placeholder="Username"
-                      />
-                    </div>
-                    <div className="font-ysa relative mt-4">
-                      <ErrorMessage
-                        name="fullName"
-                        component="div"
-                        className="text-red-500 text-xs absolute -top-5"
-                      />
-                      <Field
-                        className="border border-gray-300 h-6 text-xs w-full focus:border-darkgreen focus:ring-0"
-                        type="text"
-                        name="fullName"
-                        placeholder="Full Name"
-                      />
-                    </div>
-                    <div className="font-ysa relative mt-4">
-                      <ErrorMessage
-                        name="email"
-                        component="div"
-                        className="text-red-500 text-xs absolute -top-5"
-                      />
-                      <Field
-                        className="border border-gray-300 h-6 text-xs w-full focus:border-darkgreen focus:ring-0"
-                        type="email"
-                        name="email"
-                        placeholder="Email"
-                      />
-                    </div>
-                    <div className="font-ysa relative mt-4">
-                      <ErrorMessage
-                        name="address"
-                        component="div"
-                        className="text-red-500 text-xs absolute -top-5"
-                      />
-                      <Field
-                        className="border border-gray-300 h-6 text-xs w-full focus:border-darkgreen focus:ring-0"
-                        type="text"
-                        name="address"
-                        placeholder="Address"
-                      />
-                    </div>
-                    <div className="font-ysa relative mt-4">
-                      <ErrorMessage
-                        name="password"
-                        component="div"
-                        className="text-red-500 text-xs absolute -top-5"
-                      />
-                      <Field
-                        className="border border-gray-300 h-6 text-xs w-full focus:border-darkgreen focus:ring-0"
-                        type={showPassword ? "text" : "password"}
-                        name="password"
-                        placeholder="Password"
-                      />
-                    </div>
-                    <div className="font-ysa relative mt-4">
-                      <ErrorMessage
-                        name="confirmPassword"
-                        component="div"
-                        className="text-red-500 text-xs absolute -top-5"
-                      />
-                      <Field
-                        className="border border-gray-300 h-6 text-xs w-full focus:border-darkgreen focus:ring-0"
-                        type={showPassword ? "text" : "password"}
-                        name="confirmPassword"
-                        placeholder="Confirm Password"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-flow-col justify-start">
-                    <button
-                      type="password"
-                      onClick={togglePassword}
-                      className="border-none"
-                    >
-                      {showPassword ? (
-                        <AiOutlineEye size={15} />
-                      ) : (
-                        <AiOutlineEyeInvisible size={15} />
-                      )}
-                    </button>
-                  </div>
-                  <button
-                    className="w-full py-2 my-4 text-xs font-josefin tracking-wide border bg-darkgreen text-flashwhite hover:bg-white hover:text-darkgreen hover:border-darkgreen"
-                    type="submit"
-                    disabled={isSubmitting}
-                  >
-                    Create My Account
-                  </button>
-                </div>
-              </Form>
-            )}
-          </Formik>
-        </div>
-        <div className="text-center text-xs font-josefin tracking-wide  mb-6">
-          <p>
-            Already a user?
-            <button className="m-1">
-              <span className="p-1 hover:border-b-2 hover:border-darkgreen font-semibold">
-                <Link to="/">Log In!</Link>
-              </span>
-            </button>
-          </p>
-        </div>
-      </div>
-    </div>
+    <AuthLayout>
+      <h1 className="font-display text-3xl font-semibold tracking-tight">Create an account</h1>
+      <p className="mt-2 text-ink-soft">You'll be able to borrow books right after.</p>
+
+      {formError && (
+        <p className="mt-6 rounded-md bg-stamp-tint px-3 py-2 text-sm text-stamp" role="alert">
+          {formError}
+        </p>
+      )}
+
+      <form onSubmit={handleSubmit(onSubmit)} noValidate className="mt-6 space-y-5">
+        <Field label="Full name" htmlFor="fullName" error={errors.fullName?.message}>
+          {input("fullName", { autoComplete: "name", autoFocus: true })}
+        </Field>
+        <Field label="Username" htmlFor="username" error={errors.username?.message} hint="This is what you'll log in with.">
+          {input("username", { autoComplete: "username" })}
+        </Field>
+        <Field label="Email" htmlFor="email" error={errors.email?.message}>
+          {input("email", { type: "email", autoComplete: "email" })}
+        </Field>
+        <Field label="Address" htmlFor="address" error={errors.address?.message}>
+          {input("address", { autoComplete: "street-address" })}
+        </Field>
+        <Field
+          label="Password"
+          htmlFor="password"
+          error={errors.password?.message}
+          hint="At least 8 characters, with a capital letter and a number."
+        >
+          <PasswordInput id="password" autoComplete="new-password" aria-invalid={!!errors.password} {...register("password")} />
+        </Field>
+        <Field label="Confirm password" htmlFor="confirmPassword" error={errors.confirmPassword?.message}>
+          <PasswordInput
+            id="confirmPassword"
+            autoComplete="new-password"
+            aria-invalid={!!errors.confirmPassword}
+            {...register("confirmPassword")}
+          />
+        </Field>
+        <button type="submit" className="btn-primary w-full" disabled={isSubmitting}>
+          {isSubmitting ? "Creating account…" : "Create account"}
+        </button>
+      </form>
+
+      <p className="mt-6 text-sm text-ink-soft">
+        Already have an account?{" "}
+        <Link to="/" className="font-semibold text-cloth underline-offset-4 hover:underline">
+          Log in
+        </Link>
+      </p>
+    </AuthLayout>
   );
 }

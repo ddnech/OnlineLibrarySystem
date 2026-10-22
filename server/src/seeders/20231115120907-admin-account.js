@@ -1,61 +1,41 @@
 "use strict";
 
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 
-const Password = async (pass) => {
-  let salt = await bcrypt.genSalt(10);
-  let hashed = await bcrypt.hash(pass, salt);
-  return hashed;
-};
-
+// Demo accounts. Every account uses the same password: Password12
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
-  async up(queryInterface, Sequelize) {
-    const password = await Password("Password12");
-    /**
-     * Add seed commands here.
-     *
-     * Example:
-     * await queryInterface.bulkInsert('People', [{
-     *   name: 'John Doe',
-     *   isBetaMember: false
-     * }], {});
-     */
-    await queryInterface.bulkInsert(
-      "Users",
-      [
-        {
-          username: "admin",
-          roles: "admin",
-          email: "adminlibrary@gmail.com",
-          address:"test",
-          password: password,
-          fullName:"Admin Library",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          username: "user1",
-          roles: "user",
-          email: "usern@gmail.com",
-          address:"test",
-          password: password,
-          fullName:"Username",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ],
-      {}
-    );
+  async up(queryInterface) {
+    const password = await bcrypt.hash("Password12", 10);
+    const now = new Date();
+
+    await queryInterface.bulkInsert("Users", [
+      {
+        username: "admin",
+        roles: "admin",
+        email: "adminlibrary@gmail.com",
+        address: "Library front desk",
+        password,
+        fullName: "Admin Library",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        username: "user1",
+        roles: "user",
+        email: "usern@gmail.com",
+        address: "Jl. Melawai No. 1, Jakarta",
+        password,
+        fullName: "Demo Reader",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
   },
 
   async down(queryInterface, Sequelize) {
-    /**
-     * Add commands to revert seed here.
-     *
-     * Example:
-     * await queryInterface.bulkDelete('People', null, {});
-     */
-    await queryInterface.bulkDelete("Users", null, {});
+    await queryInterface.bulkDelete("Users", {
+      username: { [Sequelize.Op.in]: ["admin", "user1"] },
+    });
   },
 };

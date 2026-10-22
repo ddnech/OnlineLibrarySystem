@@ -1,125 +1,124 @@
-import React from 'react';
-import { useDispatch } from "react-redux";
-import { keep } from '../store/reducer/authSlice';
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Formik, Form, Field, ErrorMessage } from 'formik';
-import * as Yup from 'yup';
-import axios from 'axios';
-import { AiOutlineEye, AiOutlineEyeInvisible } from 'react-icons/ai';
+import { useState } from "react";
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { toast } from "sonner";
+import AuthLayout from "../components/AuthLayout";
+import Field from "../components/Field";
+import PasswordInput from "../components/PasswordInput";
+import { homeFor, useAuth } from "../auth/AuthContext";
+import { errorMessage } from "../lib/api";
 
-export default function LoginUser() {
+const schema = z.object({
+  username: z.string().trim().min(1, "Enter your username."),
+  password: z.string().min(1, "Enter your password."),
+});
 
+// Created by the seeders. Handy for trying the app quickly.
+const DEMO = [
+  { label: "Librarian", username: "admin", note: "approves loans, manages books" },
+  { label: "Reader", username: "user1", note: "browses and borrows" },
+];
+const DEMO_PASSWORD = "Password12";
+
+export default function Login() {
+  const { user, login } = useAuth();
   const navigate = useNavigate();
-  const [showPassword, setShowPassword] = useState(false);
-  const dispatch = useDispatch();
+  const location = useLocation();
+  const [params] = useSearchParams();
+  const [formError, setFormError] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const initialValues = {
-    username: '',
-    password: '',
-  };
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm({ resolver: zodResolver(schema), defaultValues: { username: "", password: "" } });
 
-  const validationSchema = Yup.object().shape({
-    username: Yup.string().required('Username is required'),
-    password: Yup.string().required('Password is required'),
-  });
+  if (user) return <Navigate to={homeFor(user)} replace />;
 
-  const handleSubmit = async (values, { setSubmitting, setFieldError, resetForm, setStatus }) => {
+  const signIn = async ({ username, password }) => {
+    setFormError("");
+    setBusy(true);
     try {
-      const response = await axios.post('http://localhost:8000/api/auth/login', values);
-  
-      if (response.status === 200) {
-        const { token, roles } = response.data;
-  
-        localStorage.setItem('token', token);
-        dispatch(keep(token));
-        resetForm();
-        setStatus({ success: true, token });
-  
-        if (roles === 'admin') {
-          navigate('/admin/book-list');
-        } else if (roles === 'user') {
-          navigate('/user/book-list');
-        } else {
-          console.error('Unexpected role:', roles);
-        }
-      } else {
-        throw new Error('Login failed');
-      }
+      const loggedIn = await login(username, password);
+      toast.success(`Welcome back, ${loggedIn.fullName || loggedIn.username}.`);
+      const from = location.state?.from;
+      navigate(from && from.startsWith(`/${loggedIn.roles}`) ? from : homeFor(loggedIn), { replace: true });
     } catch (error) {
-      setFieldError('username', 'Incorrect username or password');
-      setStatus({ success: false });
-    } finally {
-      setSubmitting(false);
+      setFormError(errorMessage(error, "Wrong username or password."));
+      setBusy(false);
     }
-  };
-  
-
-  const togglePasswordVisibility = () => {
-    setShowPassword((prevShowPassword) => !prevShowPassword);
   };
 
   return (
-    <>
-      <div className='grid justify-center mt-3'>
-        <div className='w-screen grid grid-flow-row justify-center'>
-          <Formik initialValues={initialValues} validationSchema={validationSchema} onSubmit={handleSubmit}>
-            {({ isSubmitting, status }) => (
-              <Form className='relative'>
-                <h2 className='w-72 text-xl text-center font-josefin mt-4 text-jetblack tracking-wide font-semibold sm:text-2xl'>Login</h2>
-                <p className='text-xs text-center font-josefin mb-4 text-jetblack tracking-wide sm:text-sm'>Please enter your username and password:</p>
-                {status && status.success && <p className='text-center text-green-500'>Login successful!</p>}
-                <div className='grid grid-cols-1 mt-7 mb-1 pb-3'>
-                  <div className='font-ysa relative mt-4'>
-                    <ErrorMessage name='username' component='div' className='text-red-500 text-xs absolute -top-5' />
-                    <Field
-                      className='border border-gray-300 h-6 text-xs w-full focus:border-darkgreen focus:ring-0'
-                      type='text'
-                      name='username'
-                      placeholder='Username'
-                    />
-                  </div>
-                </div>
-                <div className='grid grid-cols-1 mb-4'>
-                  <div className='font-ysa relative mt-4'>
-                    <ErrorMessage name='password' component='div' className='text-red-500 text-xs absolute -top-5' />
-                    <Field
-                      className='border border-gray-300 h-6 text-xs w-full focus:border-darkgreen focus:ring-0'
-                      type={showPassword ? 'text' : 'password'}
-                      name='password'
-                      placeholder='Password'
-                    />
-                    <div className='pt-2 pl-1'>
-                      <button
-                        type='button'
-                        onClick={togglePasswordVisibility}
-                        className='text-gray-500 focus:outline-none'
-                      >
-                        {showPassword ? <AiOutlineEye size={15} /> : <AiOutlineEyeInvisible size={15} />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  className='w-full py-2 my-4 text-xs font-josefin tracking-wide border bg-darkgreen text-flashwhite hover:bg-white hover:text-darkgreen hover:border-darkgreen'
-                  type='submit'
-                  disabled={isSubmitting}
-                >
-                  Sign In
-                </button>
-                <div className='text-center text-xs font-josefin tracking-wide  mb-6'>
-                  <p>
-                    Don't have an account?
-                    <button className='m-1'>
-                      <span className='p-1 hover:border-b-2 hover:border-darkgreen font-semibold'><Link to='/sign-up'>Create one</Link></span>
-                    </button>
-                  </p>
-                </div>
-              </Form>
-            )}
-          </Formik>
+    <AuthLayout>
+      <h1 className="font-display text-3xl font-semibold tracking-tight">Log in</h1>
+      <p className="mt-2 text-ink-soft">Use your library account to continue.</p>
+
+      {params.get("expired") && !formError && (
+        <p className="mt-6 rounded-md bg-ochre-tint px-3 py-2 text-sm text-ochre">
+          Your session expired. Please log in again.
+        </p>
+      )}
+      {formError && (
+        <p className="mt-6 rounded-md bg-stamp-tint px-3 py-2 text-sm text-stamp" role="alert">
+          {formError}
+        </p>
+      )}
+
+      <form onSubmit={handleSubmit(signIn)} noValidate className="mt-6 space-y-5">
+        <Field label="Username" htmlFor="username" error={errors.username?.message}>
+          <input
+            id="username"
+            className="input"
+            autoComplete="username"
+            autoFocus
+            aria-invalid={!!errors.username}
+            {...register("username")}
+          />
+        </Field>
+        <Field label="Password" htmlFor="password" error={errors.password?.message}>
+          <PasswordInput
+            id="password"
+            autoComplete="current-password"
+            aria-invalid={!!errors.password}
+            {...register("password")}
+          />
+        </Field>
+        <button type="submit" className="btn-primary w-full" disabled={busy}>
+          {busy ? "Logging in…" : "Log in"}
+        </button>
+      </form>
+
+      <p className="mt-6 text-sm text-ink-soft">
+        New here?{" "}
+        <Link to="/sign-up" className="font-semibold text-cloth underline-offset-4 hover:underline">
+          Create an account
+        </Link>
+      </p>
+
+      <section className="mt-10 border-t border-line pt-6">
+        <h2 className="text-sm font-semibold">Just testing?</h2>
+        <p className="mt-1 text-sm text-ink-soft">
+          Log in with a demo account. The password for both is <code className="font-semibold text-ink">{DEMO_PASSWORD}</code>.
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          {DEMO.map((demo) => (
+            <button
+              key={demo.username}
+              type="button"
+              disabled={busy}
+              onClick={() => signIn({ username: demo.username, password: DEMO_PASSWORD })}
+              className="panel px-3 py-2.5 text-left transition-colors hover:border-cloth disabled:opacity-60"
+            >
+              <span className="block text-sm font-semibold">{demo.label}</span>
+              <span className="block text-xs text-ink-soft">{demo.note}</span>
+            </button>
+          ))}
         </div>
-      </div>
-    </>
-  )
+      </section>
+    </AuthLayout>
+  );
 }

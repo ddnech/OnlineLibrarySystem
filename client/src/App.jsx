@@ -1,51 +1,61 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
-import { Provider, useDispatch } from 'react-redux'
-import store from './store/index'
-import LoginUser from './pages/Login';
-import SignupUser from './pages/SignUp';
-import AdminBookList from './pages/AdminBookList';
-import AdminLogList from './pages/AdminLogList';
-import RegisterBook from './pages/RegisterBook';
-import RegisterGenre from './pages/RegisterGenre';
-import AdminBookRecord from './pages/AdminBookRecord';
-import UserBookList from './pages/UserBookList';
-import UserProfile from './pages/UserProfile';
-import UserBookRecords from './pages/UserBookRecords';
+import { BrowserRouter, Navigate, Route, Routes } from "react-router";
+import { Toaster } from "sonner";
+import { AuthProvider, RequireRole } from "./auth/AuthContext";
+import AppShell from "./components/AppShell";
+import Login from "./pages/Login";
+import SignUp from "./pages/SignUp";
+import NotFound from "./pages/NotFound";
+import Catalog from "./pages/admin/Catalog";
+import Loans from "./pages/admin/Loans";
+import ActivityLog from "./pages/admin/ActivityLog";
+import AddBook from "./pages/admin/AddBook";
+import AddGenre from "./pages/admin/AddGenre";
+import Browse from "./pages/user/Browse";
+import MyLoans from "./pages/user/MyLoans";
+import Profile from "./pages/user/Profile";
 
-
-function App() {
-
+export default function App() {
   return (
-    <Provider store={store}>
-      <AppContent />
-    </Provider>
-  )
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Login />} />
+          <Route path="/sign-up" element={<SignUp />} />
+
+          <Route
+            path="/admin"
+            element={
+              <RequireRole role="admin">
+                <AppShell />
+              </RequireRole>
+            }
+          >
+            <Route index element={<Navigate to="book-list" replace />} />
+            <Route path="book-list" element={<Catalog />} />
+            <Route path="book-records" element={<Loans />} />
+            <Route path="admin-log" element={<ActivityLog />} />
+            <Route path="register-book" element={<AddBook />} />
+            <Route path="register-genre" element={<AddGenre />} />
+          </Route>
+
+          <Route
+            path="/user"
+            element={
+              <RequireRole role="user">
+                <AppShell />
+              </RequireRole>
+            }
+          >
+            <Route index element={<Navigate to="book-list" replace />} />
+            <Route path="book-list" element={<Browse />} />
+            <Route path="book-records" element={<MyLoans />} />
+            <Route path="profile" element={<Profile />} />
+          </Route>
+
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+      <Toaster position="top-right" richColors closeButton />
+    </AuthProvider>
+  );
 }
-
-function AppContent() {
-  return (
-    <Router>
-      <Routes>
-        {/* AUTH */}
-        <Route path="/" element={<LoginUser />} />
-        <Route path="/sign-up" element={<SignupUser />} />
-
-        {/* ADMIN */}
-        <Route path="/admin/book-list" element={<AdminBookList />} />
-        <Route path="/admin/admin-log" element={<AdminLogList />} />
-        <Route path="/admin/register-book" element={<RegisterBook />} />
-        <Route path="/admin/register-genre" element={<RegisterGenre />} />
-        <Route path="/admin/book-records" element={<AdminBookRecord />} />
-
-        {/* USER */}
-        <Route path="/user/book-list" element={<UserBookList />} />
-        <Route path="/user/profile" element={<UserProfile />} />
-        <Route path="/user/book-records" element={<UserBookRecords />} />
-
-
-      </Routes>
-    </Router>
-  )
-}
-
-export default App;

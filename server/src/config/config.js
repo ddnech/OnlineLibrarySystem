@@ -1,28 +1,27 @@
-require("dotenv").config({path: `../.env`});
+// Used by both the app and sequelize-cli (migrations / seeders).
+const { db } = require("./env");
+
+const base = {
+  username: db.username,
+  password: db.password,
+  database: db.database,
+  host: db.host,
+  port: db.port,
+  dialect: db.dialect,
+  logging: false,
+  // Remember which seeders already ran, so `db:seed:all` is safe to run again.
+  seederStorage: "sequelize",
+};
+
+if (db.dialect === "mysql") {
+  base.timezone = db.timezone;
+}
+if (db.dialect === "sqlite") {
+  base.storage = db.storage || "library.sqlite";
+}
 
 module.exports = {
-  development: {
-    username: process.env.DB_USERNAME,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE,
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
-    dialect: "mysql",
-  },
-  test: {
-    username: process.env.DB_USERNAME,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE,
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
-    dialect: process.env.DB_DIALECT,
-  },
-  production: {
-    username: process.env.DB_USERNAME,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE,
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
-    dialect: process.env.DB_DIALECT,
-  },
+  development: base,
+  test: base,
+  production: base,
 };

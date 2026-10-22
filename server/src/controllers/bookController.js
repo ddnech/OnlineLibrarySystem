@@ -1,220 +1,135 @@
+const { Op } = require("sequelize");
 const db = require("../models");
-const {
-  createBookImageDBPath,
-  extractFilenameFromDBPath,
-  getAbsoluteBookImagePath,
-} = require("../utils/filePathMulter");
-const { getAllBooks, getOneBook } = require("../service/book");
-const {
-  getAllBookRecords,
-  getOneBookRecord,
-} = require("../service/borrowingRecord");
+const HttpError = require("../utils/httpError");
+const { removeUpload } = require("../middleware/upload");
+const { getPaging, paginationInfo } = require("../utils/pagination");
+
+const EDITABLE = ["title", "author", "isbn", "publishedYear", "genreId", "quantity"];
+const genreInclude = { model: db.Genre, as: "Genre", attributes: ["id", "genreName"] };
 
 module.exports = {
-  async registerBook(req, res) {
+  // GET /api/book?page=1&pageSize=12&book_title=&genre_id=&available_only=true
+  async list(req, res) {
+    const paging = getPaging(req.query, 12);
+    const where = {};
+
+    if (req.query.genre_id) where.genreId = req.query.genre_id;
+    if (req.query.available_only === "true") where.available = { [Op.gt]: 0 };
+    if (req.query.book_title) {
+      const term = `%${req.query.book_title.trim()}%`;
+      where[Op.or] = [{ title: { [Op.like]: term } }, { author: { [Op.like]: term } }];
+    }
+
+    const { rows, count } = await db.Book.findAndCountAll({
+      where,
+      include: [genreInclude],
+      order: [["title", "ASC"]],
+      limit: paging.limit,
+      offset: paging.offset,
+    });
+
+    res.json({ success: true, data: rows, pagination: paginationInfo(paging, count) });
+  },
+
+  async getOne(req, res) {
+    const book = await db.Book.findByPk(req.params.id, { include: [genreInclude] });
+    if (!book) throw new HttpError(404, "Book not found.");
+    res.json(book);
+  },
+
+  async create(req, res) {
     const { title, author, isbn, publishedYear, genreId, quantity } = req.body;
+    const book = await db.Book.create({
+      title,
+      author,
+      isbn,
+      publishedYear,
+      genreId,
+      quantity,
+      available: quantity,
+      bookImg: req.uploadedPath || null,
+    });
+    res.status(201).json({ message: `"${book.title}" was added to the catalog.`, data: book });
+  },
 
-    const t = await db.sequelize.transaction();
+  async update(req, res) {
+    const book = await db.Book.findByPk(req.params.id);
+    if (!book) {
+      removeUpload(req.uploadedPath);
+      throw new HttpError(404, "Book not found.");
+    }
 
-    try {
-      if (!req.file?.filename) {
-        return res.status(400).send({
-          message: "Image is required",
-        });
+    // Copies that are out with readers right now.
+    const onLoan = book.quantity - book.available;
+
+    if (req.body.quantity !== undefined) {
+      if (req.body.quantity < onLoan) {
+        removeUpload(req.uploadedPath);
+        throw new HttpError(
+          400,
+          `${onLoan} ${onLoan === 1 ? "copy is" : "copies are"} on loan, so quantity can't go below ${onLoan}.`
+        );
       }
+      book.available = req.body.quantity - onLoan;
+    }
 
-      const bookImg = createBookImageDBPath(req.file?.filename);
+    for (const field of EDITABLE) {
+      if (req.body[field] !== undefined) book[field] = req.body[field];
+    }
 
-      const newBook = await db.Book.create(
+    let oldImage = null;
+    if (req.uploadedPath) {
+      oldImage = book.bookImg;
+      book.bookImg = req.uploadedPath;
+    } else if (req.body.removeImage === "true") {
+      oldImage = book.bookImg;
+      book.bookImg = null;
+    }
+
+    await book.save();
+    removeUpload(oldImage);
+    await book.reload({ include: [genreInclude] });
+
+    res.json({ message: "Book updated.", data: book });
+  },
+
+  // GET /api/book/records?page=1&status=Pending&book_title=
+  // Admins see everyone's records, readers only their own.
+  async records(req, res) {
+    const paging = getPaging(req.query, 10);
+    const where = {};
+
+    if (req.user.roles !== "admin") where.userId = req.user.id;
+    if (req.query.book_title) where["$Book.title$"] = { [Op.like]: `%${req.query.book_title.trim()}%` };
+    if (req.query.genre_id) where["$Book.genreId$"] = req.query.genre_id;
+    if (req.query.status === "Overdue") {
+      where.bookStatus = { [Op.in]: ["Borrowed", "Return Pending"] };
+      where.dueDate = { [Op.lt]: new Date() };
+    } else if (req.query.status) {
+      // Accepts one status or several separated by commas: ?status=Pending,Return Pending
+      where.bookStatus = { [Op.in]: String(req.query.status).split(",") };
+    }
+
+    const { rows, count } = await db.BorrowingRecord.findAndCountAll({
+      where,
+      include: [
+        { model: db.User, as: "User", attributes: ["id", "username", "fullName"] },
         {
-          title,
-          bookImg,
-          author,
-          isbn,
-          publishedYear,
-          genreId,
-          quantity,
-          avalaible: quantity,
+          model: db.Book,
+          as: "Book",
+          attributes: ["id", "title", "author", "bookImg", "genreId"],
+          include: [genreInclude],
         },
-        { transaction: t }
-      );
+      ],
+      order: [["updatedAt", "DESC"]],
+      limit: paging.limit,
+      offset: paging.offset,
+    });
 
-      await t.commit();
-
-      return res.status(201).json({
-        message: "Book register successfully",
-        data: newBook,
-      });
-    } catch (error) {
-      await t.rollback();
-      res.status(500).json({
-        message: "Fatal error on server",
-        errors: error.message,
-      });
-    }
-  },
-
-  async updateBookDetails(req, res) {
-    const { id } = req.params;
-    const editableFields = [
-      "title",
-      "author",
-      "isbn",
-      "publishedYear",
-      "genreId",
-      "quantity",
-    ];
-    const t = await db.sequelize.transaction();
-
-    try {
-      const book = await db.Book.findByPk(id, { transaction: t });
-
-      if (!book) {
-        await t.rollback();
-        return res.status(404).json({ message: "Book not found!" });
-      }
-
-      if (req.body.quantity !== undefined) {
-        const newQuantity = req.body.quantity;
-        if (newQuantity < book.avalaible) {
-          await t.rollback();
-          return res
-            .status(400)
-            .json({
-              message:
-                "Cannot update quantity below the number of available books",
-            });
-        }
-      }
-
-      editableFields.forEach((field) => {
-        if (req.body[field] !== undefined) {
-          book[field] = req.body[field];
-        }
-      });
-
-      await book.save({ transaction: t });
-      await t.commit();
-
-      return res.status(200).send({
-        message: "Book updated successfully",
-        data: book,
-      });
-    } catch (error) {
-      if (!t.finished) {
-        await t.rollback();
-      }
-      console.error("Error:", error);
-      res
-        .status(500)
-        .json({ message: "Fatal error on server", errors: error.message });
-    }
-  },
-
-  async getBooksList(req, res) {
-    const page = parseInt(req.query.page, 10) || 1;
-    const pageSize = parseInt(req.query.pageSize, 10) || 10;
-    const genreId = req.query.genre_id;
-    const bookTitle = req.query.book_title;
-
-    const options = {
-      where: {},
-    };
-
-    if (genreId) {
-      options.where.genreId = genreId;
-    }
-
-    if (bookTitle) {
-      options.where.title = {
-        [db.Sequelize.Op.like]: `%${bookTitle}%`,
-      };
-    }
-
-    try {
-      const result = await getAllBooks(options, page, pageSize);
-      if (result.success) {
-        res.status(200).json(result);
-      } else {
-        res.status(500).json({
-          message: "Error fetching Books.",
-          errors: result.error,
-        });
-      }
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({
-        success: false,
-        message: "Fatal error on server.",
-        errors: error.message,
-      });
-    }
-  },
-
-  async getSingleBook(req, res) {
-    try {
-      let filter = {};
-      if (req.params.id) {
-        filter.id = req.params.id;
-      } else if (req.query.name) {
-        filter.name = req.query.name;
-      } else {
-        return res.status(400).json({
-          message: "Provide either book name or ID.",
-        });
-      }
-
-      const result = await getOneBook(filter);
-      if (result.success) {
-        return res.status(200).json(result.data);
-      } else {
-        return res.status(500).json({ message: result.error });
-      }
-    } catch (error) {
-      console.error(error);
-      return res.status(500).json({ message: "Internal Server Error" });
-    }
-  },
-
-  async getBookRecordsList(req, res) {
-    const page = Number(req.query.page) || 1;
-    const pageSize = Number(req.query.pageSize) || 10;
-    const bookTitle = req.query.book_title;
-    const genreId = req.query.genre_id;
-
-    let userId = null;
-    if (req.user.roles !== "admin") {
-      userId = req.user.id;
-    }
-
-    console.log("User role:", req.user.role);
-    console.log("User ID for query:", userId);
-
-    try {
-      const result = await getAllBookRecords(
-        { bookTitle, genreId, userId },
-        page,
-        pageSize
-      );
-      if (result.success) {
-        res.status(200).json({
-          message: "Book records retrieved successfully",
-          data: result.data,
-          pagination: result.pagination,
-        });
-      } else {
-        res.status(500).json({
-          message: "Error fetching book records.",
-          errors: result.error,
-        });
-      }
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({
-        success: false,
-        message: "Fatal error on server.",
-        errors: error.message,
-      });
-    }
+    res.json({
+      message: "Book records retrieved successfully",
+      data: rows,
+      pagination: paginationInfo(paging, count),
+    });
   },
 };

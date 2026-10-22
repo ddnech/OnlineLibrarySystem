@@ -1,113 +1,86 @@
+const { Op } = require("sequelize");
 const db = require("../models");
+const HttpError = require("../utils/httpError");
+
+// A reader can only have one book "in progress" at a time.
+const ACTIVE_STATUSES = ["Pending", "Borrowed", "Return Pending"];
 
 module.exports = {
-  async getUserProfile(req, res) {
-    const userId = req.user.id;
+  async profile(req, res) {
+    const user = await db.User.findByPk(req.user.id, {
+      attributes: ["id", "username", "email", "address", "fullName", "roles", "createdAt"],
+    });
+    if (!user) throw new HttpError(404, "User not found.");
 
-    try {
-      const user = await db.User.findByPk(userId, {
-        attributes: ['id', 'username', 'email', 'address', 'fullName', 'roles'],
-        include: [{
-          model: db.BorrowingRecord,
-          as: 'BorrowingRecords',
-          attributes: ['id', 'borrowDate', 'dueDate', 'returnDate', 'bookStatus'],
-          limit: 1,
-          order: [['createdAt', 'DESC']]
-        }]
-      });
+    const currentLoan = await db.BorrowingRecord.findOne({
+      where: { userId: user.id, bookStatus: { [Op.in]: ACTIVE_STATUSES } },
+      include: [{ model: db.Book, as: "Book", attributes: ["id", "title", "author", "bookImg"] }],
+      order: [["createdAt", "DESC"]],
+    });
 
-      if (!user) {
-        return res.status(404).json({ message: "User not found." });
-      }
+    const [totalBorrowed, returnedLate] = await Promise.all([
+      db.BorrowingRecord.count({
+        where: { userId: user.id, bookStatus: { [Op.in]: ["Borrowed", "Return Pending", "Returned"] } },
+      }),
+      db.BorrowingRecord.count({ where: { userId: user.id, bookStatus: "Returned", overdue: true } }),
+    ]);
 
-      return res.status(200).json({
-        message: "User profile retrieved successfully.",
-        data: user
-      });
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
-      return res.status(500).json({
-        message: "Internal server error",
-        error: error.message
-      });
-    }
+    res.json({
+      message: "User profile retrieved successfully.",
+      data: { ...user.toJSON(), currentLoan, stats: { totalBorrowed, returnedLate } },
+    });
   },
 
-  async bookRequest(req, res) {
-    const bookId = req.params.book_id;
+  // POST /api/users/:book_id  -> ask to borrow a book
+  async requestBook(req, res) {
     const userId = req.user.id;
-    const t = await db.sequelize.transaction();
-    try {
 
-      const latestBorrow = await db.BorrowingRecord.findOne({
-        where: { userId },
-        order: [['createdAt', 'DESC']]
-      });
-
-      if (latestBorrow && latestBorrow.bookStatus !== 'Returned') {
-        return res.status(400).json({ message: "User already has a borrowed book." });
-      }
-
-      const book = await db.Book.findOne({
-        where: { id: bookId, avalaible: { [db.Sequelize.Op.gt]: 0 } }
-      });
-      if (!book) {
-        return res.status(404).json({ message: "Book is not available for borrowing." });
-      }
-
-      const borrowDate = new Date();
-      const dueDate = new Date(borrowDate.getTime() + 14 * 24 * 60 * 60 * 1000);
-
-      const borrowingRecord = await db.BorrowingRecord.create({
-        userId,
-        bookId,
-        borrowDate,
-        dueDate,
-        bookStatus: "Pending",
-        overdue: false
-      }, { transaction: t });
-
-      await t.commit();
-      return res.status(201).json({
-        message: "Book borrowing request successful.",
-        data: borrowingRecord
-      });
-    } catch (error) {
-      await t.rollback();
-      return res.status(500).json({
-        message: "Fatal error on server",
-        error: error.message
-      });
+    const active = await db.BorrowingRecord.findOne({
+      where: { userId, bookStatus: { [Op.in]: ACTIVE_STATUSES } },
+      include: [{ model: db.Book, as: "Book", attributes: ["title"] }],
+    });
+    if (active) {
+      throw new HttpError(
+        400,
+        `You already have "${active.Book?.title}" (${active.bookStatus.toLowerCase()}). Return it before borrowing another book.`
+      );
     }
+
+    const book = await db.Book.findByPk(req.params.book_id);
+    if (!book) throw new HttpError(404, "Book not found.");
+    if (book.available < 1) throw new HttpError(409, `All copies of "${book.title}" are out right now.`);
+
+    // Borrow and due dates are set when an admin approves the request.
+    const record = await db.BorrowingRecord.create({
+      userId,
+      bookId: book.id,
+      bookStatus: "Pending",
+      overdue: false,
+    });
+
+    res.status(201).json({
+      message: `Request sent for "${book.title}". You can pick it up once an admin approves it.`,
+      data: record,
+    });
   },
 
-  async bookReturn(req, res) {
-    const recordId = req.params.id;
-    const userId = req.user.id; 
-    const t = await db.sequelize.transaction();
-  
-    try {
-      const activeBorrow = await db.BorrowingRecord.findByPk(recordId);
-  
-      if (!activeBorrow || activeBorrow.bookStatus === 'Returned' || activeBorrow.userId !== userId) {
-        return res.status(404).json({ message: "Borrowing record not found, already returned, or not borrowed by this user." });
-      }
-  
-      await activeBorrow.update({ 
-        bookStatus: 'Return Pending' 
-      }, { transaction: t });
-  
-      await t.commit();
-      return res.status(200).json({
-        message: "Book return marked as pending",
-        data: activeBorrow
-      });
-    } catch (error) {
-      await t.rollback();
-      return res.status(500).json({
-        message: "Internal server error",
-        error: error.message
-      });
-    }
-  }
+  // DELETE /api/users/requests/:id  -> cancel a request that hasn't been approved yet
+  async cancelRequest(req, res) {
+    const record = await db.BorrowingRecord.findByPk(req.params.id);
+    if (!record || record.userId !== req.user.id) throw new HttpError(404, "Request not found.");
+    if (record.bookStatus !== "Pending") throw new HttpError(400, "Only pending requests can be cancelled.");
+
+    await record.destroy();
+    res.json({ message: "Request cancelled." });
+  },
+
+  // PATCH /api/users/pending-return/:id  -> tell the library you're returning a book
+  async returnBook(req, res) {
+    const record = await db.BorrowingRecord.findByPk(req.params.id);
+    if (!record || record.userId !== req.user.id) throw new HttpError(404, "Loan not found.");
+    if (record.bookStatus !== "Borrowed") throw new HttpError(400, "This book isn't currently borrowed.");
+
+    await record.update({ bookStatus: "Return Pending" });
+    res.json({ message: "Return noted. An admin will confirm once they have the book.", data: record });
+  },
 };

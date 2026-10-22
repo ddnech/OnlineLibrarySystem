@@ -1,0 +1,53 @@
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { Navigate, useLocation } from "react-router";
+import api, { TOKEN_KEY, USER_KEY } from "../lib/api";
+
+const AuthContext = createContext(null);
+
+function readStoredUser() {
+  try {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const user = JSON.parse(localStorage.getItem(USER_KEY) || "null");
+    return token && user ? user : null;
+  } catch {
+    return null;
+  }
+}
+
+export function AuthProvider({ children }) {
+  // The session survives a page refresh because it lives in localStorage.
+  const [user, setUser] = useState(readStoredUser);
+
+  const login = useCallback(async (username, password) => {
+    const { data } = await api.post("/auth/login", { username, password });
+    localStorage.setItem(TOKEN_KEY, data.token);
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    setUser(data.user);
+    return data.user;
+  }, []);
+
+  const logout = useCallback(() => {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    setUser(null);
+  }, []);
+
+  const value = useMemo(() => ({ user, login, logout }), [user, login, logout]);
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  return useContext(AuthContext);
+}
+
+export const homeFor = (user) => (user?.roles === "admin" ? "/admin/book-list" : "/user/book-list");
+
+/** Only renders its children for the given role, otherwise redirects. */
+export function RequireRole({ role, children }) {
+  const { user } = useAuth();
+  const location = useLocation();
+
+  if (!user) return <Navigate to="/" replace state={{ from: location.pathname }} />;
+  if (user.roles !== role) return <Navigate to={homeFor(user)} replace />;
+  return children;
+}

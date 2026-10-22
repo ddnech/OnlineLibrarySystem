@@ -1,20 +1,18 @@
-'use strict';
+"use strict";
+
+const GENRES = ["Fiction", "Non-Fiction", "Mystery", "Fantasy", "Science", "History"];
 
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
-  async up (queryInterface, Sequelize) {
-    await queryInterface.bulkInsert('Genres', [
-      { genreName: 'Fiction', createdAt: new Date(), updatedAt: new Date() },
-      { genreName: 'Non-Fiction', createdAt: new Date(), updatedAt: new Date() },
-    ], {});
+  async up(queryInterface) {
+    const now = new Date();
+    await queryInterface.bulkInsert(
+      "Genres",
+      GENRES.map((genreName) => ({ genreName, genreImg: null, createdAt: now, updatedAt: now }))
+    );
   },
 
-  async down (queryInterface, Sequelize) {
-    /**
-     * Add commands to revert seed here.
-     *
-     * Example:
-     * await queryInterface.bulkDelete('People', null, {});
-     */
-  }
+  async down(queryInterface, Sequelize) {
+    await queryInterface.bulkDelete("Genres", { genreName: { [Sequelize.Op.in]: GENRES } });
+  },
 };
